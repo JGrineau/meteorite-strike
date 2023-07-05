@@ -1,0 +1,209 @@
+<!-- 
+    Coder: Jarrod Grineau 
+    Date: 04/02/2023
+-->
+<html>
+  <head>
+    <title>Jarrod Grineau's Meteorite Strikes</title>
+
+    <style>
+      #map {
+        height: 400px;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body onload="ShowMeteorites();">
+    <!-- key: AIzaSyACI2sYnQkqm3Q-77vP-ynhkZIi8YECysE -->
+    <script
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyACI2sYnQkqm3Q-77vP-ynhkZIi8YECysE&callback=initMap&v=weekly"
+      defer
+    ></script>
+
+    <script type="text/JavaScript">
+      let meteorite_landings_url = "https://data.nasa.gov/resource/y77d-th95.json";
+
+      let map = null;
+      let markers = [];
+      let requestObject = new XMLHttpRequest();
+      let data = null;
+
+      function initMap() {
+        if (map === null) {
+          map = new google.maps.Map(
+            document.getElementById("map"),
+            {
+              zoom: 3.0,
+              center: { lat: 30, lng: 0 },
+            }
+          );
+        }
+      }
+
+      /*
+      This is the ShowMeteorites function that allows the map to create markers based on the years that are filtered.
+      It must show the current years and delete the markers that are not listed within those years based on the json file. 
+      */
+      function ShowMeteorites() {
+  requestObject.onreadystatechange = function () {
+    if (requestObject.readyState === 4 && requestObject.status === 200) {
+      data = JSON.parse(requestObject.responseText);
+
+      // create markers for each meteorite
+      data.forEach((meteorite) => {
+        const marker = new google.maps.Marker({
+          position: {
+            lat: parseFloat(meteorite.reclat),
+            lng: parseFloat(meteorite.reclong),
+          },
+          map: map,
+          title: meteorite.name,
+        });
+        marker.id = meteorite.id; 
+
+        marker.metadata = { 
+          year: meteorite.year,
+          mass: meteorite.mass,
+          class: meteorite.recclass
+        };
+        markers.push(marker);
+
+        // event listener to click on the Markers on the map to display the info
+        marker.addListener("click", () => {
+          const infoWindow = new google.maps.InfoWindow({
+            content: `
+              <div>
+                <p><strong>Name:</strong> ${meteorite.name}</p>
+                <p><strong>Year:</strong> ${meteorite.year}</p>
+                <p><strong>Mass:</strong> ${meteorite.mass} g</p>
+                <p><strong>Class:</strong> ${meteorite.recclass}</p>
+              </div>
+            `
+          });
+          infoWindow.open(map, marker);
+        });
+      });
+
+      // add event listener to the filter button 
+      const filterButton = document.getElementById("filter-button");
+      filterButton.addEventListener("click", filterMeteorites);
+    }
+  };
+  requestObject.open("GET", meteorite_landings_url, true);
+  requestObject.send();
+}
+
+    /*
+        this is the filter action via the years typed or pressed by the button
+        there is a check added to make sure the years are not null.
+        Then whent he button is pressed the map wil update
+    */
+
+function filterMeteorites() {
+  // get min and max years from user input and update
+  const minYear = document.getElementById("min-year").value;
+  const maxYear = document.getElementById("max-year").value;
+  const filteredMeteorites = data.filter((meteorite) => {
+    if (meteorite.year) { 
+      const year = parseInt(meteorite.year.substring(0, 4));
+      return year >= minYear && year <= maxYear;
+    }
+  });
+
+  // update markers
+  markers.forEach((marker) => {
+    const meteorite = filteredMeteorites.find((m) => m.id === marker.id);
+    if (meteorite) {
+      marker.setVisible(true);
+    } else {
+      marker.setVisible(false);
+    }
+  });
+
+  // update table
+  const tableBody = document.getElementById("tablebody");
+  tableBody.innerHTML = "";
+  filteredMeteorites.forEach((meteorite) => {
+    const row = document.createElement("tr");
+    const idCell = document.createElement("td");
+    const nameCell = document.createElement("td");
+    const yearCell = document.createElement("td");
+    const classCell = document.createElement("td");
+
+    idCell.innerText = meteorite.id;
+    nameCell.innerText = meteorite.name;
+    if (meteorite.year) { 
+      yearCell.innerText = meteorite.year.substring(0, 4);
+    }
+    classCell.innerText = meteorite.recclass;
+
+    row.appendChild(idCell);
+    row.appendChild(nameCell);
+    row.appendChild(yearCell);
+    row.appendChild(classCell);
+
+    tableBody.appendChild(row);
+  });
+}
+
+    /*
+        this is the filtered save function to download the file when clicking the button.
+    */
+
+function saveFilteredMeteorites() {
+  const minYear = document.getElementById("min-year").value;
+  const maxYear = document.getElementById("max-year").value;
+    //filter by the year it happened
+  const filteredMeteorites = data.filter((meteorite) => {
+    if (meteorite.year) { 
+      const year = parseInt(meteorite.year.substring(0, 4));
+      return year >= minYear && year <= maxYear;
+    }
+  });
+
+  // create json file by strigifying it using the Blob Api 
+  const json = new Blob([JSON.stringify(filteredMeteorites)], { type: "application/json" });
+
+  // this it to create a file to be downloaded and then saved via your download folder  on your desktop
+  const downloadLink = document.createElement("a");
+  downloadLink.href = URL.createObjectURL(json);
+  downloadLink.download = "filtered-meteorites.json";
+
+  downloadLink.click(); 
+}
+  </script>
+
+  <div id="map"></div>
+
+  <div id="selectors" style="border: 1px solid black; width: 400px; margin: 5px auto; padding: 10px; text-align: center;">
+    <label for="min-year">Min year:</label>
+    <input type="number" id="min-year">
+    <br>
+    <br>
+    <label for="max-year">Max year:</label>
+    <input type="number" id="max-year">
+    <br>
+    <br>
+    <button id="filter-button">Filter</button>
+    <br>
+    <br>
+    <button id="save-button" onclick="saveFilteredMeteorites()">Save Filtered List</button>
+
+  </div>
+
+  <div class="table" style="border: 1px solid black; width: 400px; margin: 5px auto; padding: 10px; text-align: center;">
+        <table>
+          <thead>
+            <tr>
+              <th>Id</th>
+              <th>Name</th>
+              <th>Year</th>
+              <th>Class</th>
+            </tr>
+          </thead>
+          <tbody id="tablebody" style="margin: 5px auto; padding: 10px; text-align: center;"></tbody>
+        </table>
+      </div>
+    </div>
+  </body>
+</html>
